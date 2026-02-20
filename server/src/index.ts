@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
   credentials: true,
 }));
 
@@ -32,6 +32,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/collaborations", collaborationRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Cortex server running on port ${PORT}`);
+app.listen(Number(PORT), "127.0.0.1", () => {
+  console.log(`Cortex server running on http://127.0.0.1:${PORT}`);
 });

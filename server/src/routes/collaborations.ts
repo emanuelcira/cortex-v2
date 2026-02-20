@@ -8,22 +8,31 @@ const router = Router();
 
 router.post("/requests", requireAuth, (req, res) => {
   const senderId = req.session.userId;
-  const { project_id, recipient_id, message } = req.body;
+  const { project_id, message } = req.body;
 
-  if (!project_id || !recipient_id) {
-    res.status(400).json({ error: "project_id and recipient_id are required" });
+  if (!project_id) {
+    res.status(400).json({ error: "project_id is required" });
     return;
   }
 
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(project_id) as any;
-  if (!project || project.owner_id !== senderId) {
-    res.status(403).json({ error: "Not the project owner" });
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
     return;
   }
 
+  // Prevent owner from requesting to collaborate on their own project
+  if (project.owner_id === senderId) {
+    res.status(400).json({ error: "You cannot request to collaborate on your own project" });
+    return;
+  }
+
+  // Recipient is always the project owner
+  const recipientId = project.owner_id;
+
   const existing = db.prepare(
-    "SELECT id FROM collaboration_requests WHERE project_id = ? AND recipient_id = ? AND status = 'pending'"
-  ).get(project_id, recipient_id);
+    "SELECT id FROM collaboration_requests WHERE project_id = ? AND sender_id = ? AND status = 'pending'"
+  ).get(project_id, senderId);
   if (existing) {
     res.status(409).json({ error: "Request already sent" });
     return;
@@ -31,7 +40,7 @@ router.post("/requests", requireAuth, (req, res) => {
 
   const result = db.prepare(
     "INSERT INTO collaboration_requests (project_id, sender_id, recipient_id, message) VALUES (?, ?, ?, ?)"
-  ).run(project_id, senderId, recipient_id, message || "");
+  ).run(project_id, senderId, recipientId, message || "");
 
   res.status(201).json({ id: result.lastInsertRowid });
 });

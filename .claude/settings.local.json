@@ -3,7 +3,19 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(npx:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(lsof:*)",
+      "Bash(node -e:*)",
+      "Bash(../node_modules/.bin/tsx:*)",
+      "Bash(curl:*)",
+      "Bash(node --import tsx/esm:*)",
+      "Bash(../node_modules/.bin/vite)",
+      "Bash(../node_modules/.bin/vite:*)",
+      "Bash(/Users/emanuel/Documents/cortex/node_modules/.bin/tsx:*)",
+      "Bash(echo:*)",
+      "Bash(tsx:*)",
+      "Bash(node:*)"
     ]
   }
 }

@@ -24,7 +24,7 @@ router.post("/", requireAuth, (req, res) => {
   } = req.body;
 
   if (!name || !project_type || !stage || !roles_needed?.length ||
-      !hours_per_week || !duration || !goal || !location) {
+    !hours_per_week || !duration || !goal || !location) {
     res.status(400).json({ error: "All fields are required" });
     return;
   }
@@ -90,7 +90,7 @@ router.get("/:id", requireAuth, (req, res) => {
   res.json(project);
 });
 
-// Update project status
+// Update project (status-only or full detail edit)
 router.put("/:id", requireAuth, (req, res) => {
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id) as any;
   if (!project) {
@@ -102,16 +102,46 @@ router.put("/:id", requireAuth, (req, res) => {
     return;
   }
 
-  const { status } = req.body;
-  if (!["open", "active", "completed", "dropped"].includes(status)) {
-    res.status(400).json({ error: "Invalid status" });
+  const { status, name, project_type, stage, roles_needed, skills_needed, hours_per_week, duration, goal, location } = req.body;
+
+  // Status-only update
+  if (status !== undefined && Object.keys(req.body).length === 1) {
+    if (!["open", "active", "completed", "dropped"].includes(status)) {
+      res.status(400).json({ error: "Invalid status" });
+      return;
+    }
+    db.prepare("UPDATE projects SET status = ? WHERE id = ?").run(status, req.params.id);
+    if (status === "completed" || status === "dropped") {
+      db.prepare("UPDATE collaborations SET status = ? WHERE project_id = ?").run(status, req.params.id);
+    }
+    res.json({ ok: true });
     return;
   }
 
-  db.prepare("UPDATE projects SET status = ? WHERE id = ?").run(status, req.params.id);
+  // Full detail edit
+  if (!name || !project_type || !stage || !roles_needed?.length || !hours_per_week || !duration || !goal || !location) {
+    res.status(400).json({ error: "All fields are required" });
+    return;
+  }
 
-  if (status === "completed" || status === "dropped") {
-    db.prepare("UPDATE collaborations SET status = ? WHERE project_id = ?").run(status, req.params.id);
+  db.prepare(`
+    UPDATE projects SET
+      name = ?, project_type = ?, stage = ?, roles_needed = ?,
+      skills_needed = ?, hours_per_week = ?, duration = ?, goal = ?, location = ?
+    WHERE id = ?
+  `).run(
+    name, project_type, stage,
+    JSON.stringify(roles_needed), JSON.stringify(skills_needed || []),
+    hours_per_week, duration, goal, location,
+    req.params.id
+  );
+
+  // If status is also provided alongside field edits, apply it too
+  if (status && ["open", "active", "completed", "dropped"].includes(status)) {
+    db.prepare("UPDATE projects SET status = ? WHERE id = ?").run(status, req.params.id);
+    if (status === "completed" || status === "dropped") {
+      db.prepare("UPDATE collaborations SET status = ? WHERE project_id = ?").run(status, req.params.id);
+    }
   }
 
   res.json({ ok: true });

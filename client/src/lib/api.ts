@@ -56,7 +56,7 @@ export const api = {
     request(`/projects/${projectId}/matches`),
 
   // Collaboration requests
-  sendRequest: (data: { project_id: number; recipient_id: number; message?: string }) =>
+  sendRequest: (data: { project_id: number; message?: string }) =>
     request("/collaborations/requests", { method: "POST", body: JSON.stringify(data) }),
 
   getIncomingRequests: () =>

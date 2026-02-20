@@ -1,5 +1,8 @@
 node_modules/
 dist/
 *.db
+*.db-shm
+*.db-wal
 .DS_Store
 *.local
+"package-lock 2.json"

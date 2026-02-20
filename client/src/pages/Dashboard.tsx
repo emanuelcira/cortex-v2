@@ -8,27 +8,32 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [myProjects, setMyProjects] = useState<any[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
   const [collabs, setCollabs] = useState<{ asCollaborator: any[]; asOwner: any[] }>({
     asCollaborator: [],
     asOwner: [],
   });
 
   useEffect(() => {
-    api.getProjects(true).then(setMyProjects).catch(() => {});
-    api.getIncomingRequests().then(setIncomingRequests).catch(() => {});
-    api.getCollaborations().then(setCollabs).catch(() => {});
+    api.getProjects(true).then(setMyProjects).catch(() => { });
+    api.getIncomingRequests().then(setIncomingRequests).catch(() => { });
+    api.getOutgoingRequests().then(setOutgoingRequests).catch(() => { });
+    api.getCollaborations().then(setCollabs).catch(() => { });
   }, []);
 
   const handleRequest = async (id: number, status: "accepted" | "declined") => {
     await api.respondToRequest(id, status);
     setIncomingRequests((r) => r.filter((req) => req.id !== id));
-    api.getCollaborations().then(setCollabs).catch(() => {});
+    api.getCollaborations().then(setCollabs).catch(() => { });
   };
 
   const activeCollabs = [
     ...collabs.asOwner.filter((c) => c.project_status === "active"),
     ...collabs.asCollaborator.filter((c) => c.project_status === "active"),
   ];
+
+  const pendingOutgoing = outgoingRequests.filter((r) => r.status === "pending");
+  const resolvedOutgoing = outgoingRequests.filter((r) => r.status !== "pending");
 
   return (
     <Layout>
@@ -51,7 +56,7 @@ export default function Dashboard() {
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900">
-                      {req.sender_name} wants you on{" "}
+                      {req.sender_name} wants to collaborate on{" "}
                       <span className="font-semibold">{req.project_name}</span>
                     </p>
                     <p className="mt-0.5 text-xs text-gray-500">
@@ -106,6 +111,56 @@ export default function Dashboard() {
           )}
         </section>
 
+        {outgoingRequests.length > 0 && (
+          <section>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              My Requests
+            </h2>
+            <div className="mt-3 space-y-2">
+              {pendingOutgoing.length > 0 && pendingOutgoing.map((req) => (
+                <Link
+                  key={req.id}
+                  to={`/projects/${req.project_id}`}
+                  className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 transition-colors hover:border-gray-300"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{req.project_name}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Sent to {req.recipient_name} &middot; waiting for response
+                    </p>
+                  </div>
+                  <RequestStatusBadge status={req.status} />
+                </Link>
+              ))}
+              {resolvedOutgoing.length > 0 && (
+                <details className="group">
+                  <summary className="cursor-pointer list-none text-xs text-gray-400 hover:text-gray-600 mt-1 select-none">
+                    <span className="group-open:hidden">Show {resolvedOutgoing.length} resolved request{resolvedOutgoing.length !== 1 ? "s" : ""}</span>
+                    <span className="hidden group-open:inline">Hide resolved</span>
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {resolvedOutgoing.map((req) => (
+                      <Link
+                        key={req.id}
+                        to={`/projects/${req.project_id}`}
+                        className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 transition-colors hover:border-gray-200"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">{req.project_name}</p>
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            {req.recipient_name}
+                          </p>
+                        </div>
+                        <RequestStatusBadge status={req.status} />
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          </section>
+        )}
+
         <section>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
@@ -156,6 +211,19 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] || styles.open}`}>
+      {status}
+    </span>
+  );
+}
+
+function RequestStatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    pending: "bg-yellow-50 text-yellow-700",
+    accepted: "bg-green-50 text-green-700",
+    declined: "bg-gray-100 text-gray-500",
+  };
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-500"}`}>
       {status}
     </span>
   );
