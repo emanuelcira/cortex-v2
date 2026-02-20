@@ -1,76 +1,89 @@
-import Database from "better-sqlite3";
-import path from "path";
-import { fileURLToPath } from "url";
+import pg from "pg";
+import dotenv from "dotenv";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, "..", "cortex.db");
+dotenv.config();
 
-const db = new Database(dbPath);
+const { Pool } = pg;
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is not set. Check server/.env");
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    name TEXT NOT NULL DEFAULT '',
-    role TEXT NOT NULL DEFAULT '',
-    skills TEXT NOT NULL DEFAULT '[]',
-    availability INTEGER NOT NULL DEFAULT 0,
-    timezone TEXT NOT NULL DEFAULT '',
-    portfolio_github TEXT NOT NULL DEFAULT '',
-    portfolio_figma TEXT NOT NULL DEFAULT '',
-    portfolio_website TEXT NOT NULL DEFAULT '',
-    work_preference TEXT NOT NULL DEFAULT '',
-    profile_complete INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+});
 
-  CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_id INTEGER NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    project_type TEXT NOT NULL,
-    stage TEXT NOT NULL,
-    roles_needed TEXT NOT NULL DEFAULT '[]',
-    skills_needed TEXT NOT NULL DEFAULT '[]',
-    hours_per_week INTEGER NOT NULL,
-    duration TEXT NOT NULL,
-    goal TEXT NOT NULL,
-    location TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'open',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
+// Bootstrap schema on startup
+async function initSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT '',
+      skills TEXT NOT NULL DEFAULT '[]',
+      availability INTEGER NOT NULL DEFAULT 0,
+      timezone TEXT NOT NULL DEFAULT '',
+      portfolio_github TEXT NOT NULL DEFAULT '',
+      portfolio_figma TEXT NOT NULL DEFAULT '',
+      portfolio_website TEXT NOT NULL DEFAULT '',
+      work_preference TEXT NOT NULL DEFAULT '',
+      profile_complete BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-  CREATE TABLE IF NOT EXISTS collaboration_requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id INTEGER NOT NULL REFERENCES projects(id),
-    sender_id INTEGER NOT NULL REFERENCES users(id),
-    recipient_id INTEGER NOT NULL REFERENCES users(id),
-    message TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
+    CREATE TABLE IF NOT EXISTS projects (
+      id SERIAL PRIMARY KEY,
+      owner_id INTEGER NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      project_type TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      roles_needed TEXT NOT NULL DEFAULT '[]',
+      skills_needed TEXT NOT NULL DEFAULT '[]',
+      hours_per_week INTEGER NOT NULL,
+      duration TEXT NOT NULL,
+      goal TEXT NOT NULL,
+      location TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-  CREATE TABLE IF NOT EXISTS collaborations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id INTEGER NOT NULL REFERENCES projects(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    status TEXT NOT NULL DEFAULT 'active',
-    joined_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
+    CREATE TABLE IF NOT EXISTS collaboration_requests (
+      id SERIAL PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id),
+      sender_id INTEGER NOT NULL REFERENCES users(id),
+      recipient_id INTEGER NOT NULL REFERENCES users(id),
+      message TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-  CREATE TABLE IF NOT EXISTS checkins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    collaboration_id INTEGER NOT NULL REFERENCES collaborations(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    completed TEXT NOT NULL,
-    blocked TEXT NOT NULL DEFAULT '',
-    next_steps TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
+    CREATE TABLE IF NOT EXISTS collaborations (
+      id SERIAL PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      status TEXT NOT NULL DEFAULT 'active',
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-export default db;
+    CREATE TABLE IF NOT EXISTS checkins (
+      id SERIAL PRIMARY KEY,
+      collaboration_id INTEGER NOT NULL REFERENCES collaborations(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      completed TEXT NOT NULL,
+      blocked TEXT NOT NULL DEFAULT '',
+      next_steps TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  console.log("Database schema ready");
+}
+
+initSchema().catch((err) => {
+  console.error("Failed to initialise schema:", err);
+  process.exit(1);
+});
+
+export default pool;

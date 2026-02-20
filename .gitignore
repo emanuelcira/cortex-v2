@@ -6,3 +6,4 @@ dist/
 .DS_Store
 *.local
 "package-lock 2.json"
+.env
